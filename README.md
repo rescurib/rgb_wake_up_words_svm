@@ -6,10 +6,8 @@ This project implements an SVM classifier for the detection of three wake up wor
 
 - **Audio Acquisition**: I2S interface with INMP441 MEMS microphone at 8 kHz.
 - **Signal Processing**:
-  - Extraction of 13 MFCC coefficients per frame.
-  - 32 ms hop (256 samples).
-  - 256 ms windows (8 hops).
-  - Calculation of mean and standard deviation of MFCC coefficients.
+  - Extraction of 13 MFCC coefficients per hop in fixed point Q8.7 format.
+  - Delta MFCC computing. 
 - **Classification**:
   - Implementation of multiple "one-vs-rest" SVM classifiers using the CMSIS-DSP library.
 - **User Interface**:
