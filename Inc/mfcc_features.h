@@ -16,6 +16,8 @@
  * @brief Inicializa el módulo de extracción MFCC.
  */
 void mfcc_features_init(void);
+void mfcc_features_init_f32(void);
+void mfcc_features_init_q15(void);
 
 /**
  * @brief  Calcula las características MFCC sobre un bloque de audio.
@@ -23,6 +25,11 @@ void mfcc_features_init(void);
  * @param  out_buffer   Puntero al buffer donde se guardarán los resultados MFCC.
  */
 void mfcc_features_compute(float32_t *audio_buffer, float32_t *out_buffer);
+void mfcc_features_compute_q15(q15_t *audio_buffer, q15_t *out_buffer);
+
+void mfcc_features_build_feature_vector_q15(q15_t *mfcc_mat, q15_t *delta_mfcc_matrix, uint32_t num_hops, uint32_t num_coeffs, q15_t *feature_vector);
+void compute_delta_mfcc_q15(const q15_t *mfcc_mat, q15_t *delta_mat, uint32_t num_hops, uint32_t num_coeffs, uint16_t win_length);
+void interleave_mfcc_delta_q15(const q15_t *mfcc_mat, const q15_t *delta_mat, uint32_t num_hops, uint32_t num_coeffs, q15_t *feature_vector);
 
 /**
  * @brief  Calcula la media y desviación estándar de una matriz de vectores MFCC.

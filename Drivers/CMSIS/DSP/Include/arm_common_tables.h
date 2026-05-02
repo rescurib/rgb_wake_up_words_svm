@@ -118,4 +118,8 @@ extern const float32_t sinTable_f32[FAST_MATH_TABLE_SIZE + 1];
 extern const q31_t sinTable_q31[FAST_MATH_TABLE_SIZE + 1];
 extern const q15_t sinTable_q15[FAST_MATH_TABLE_SIZE + 1];
 
+extern const q15_t realCoefAQ15[8192];
+extern const q15_t realCoefBQ15[8192];
+
 #endif /*  ARM_COMMON_TABLES_H */
+

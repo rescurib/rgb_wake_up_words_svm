@@ -122,6 +122,10 @@ extern const uint32_t mfcc_filter_len_config3_f32[NB_MFCC_NB_FILTER_CONFIG3_F32]
 extern const uint32_t mfcc_filter_pos_config_8k_f32[NB_MFCC_NB_FILTER_CONFIG_8K_F32];
 extern const uint32_t mfcc_filter_len_config_8k_f32[NB_MFCC_NB_FILTER_CONFIG_8K_F32];
 
+#define NB_MFCC_NB_FILTER_CONFIG_8K_Q15 20
+extern const uint32_t mfcc_filter_pos_config_8k_q15[NB_MFCC_NB_FILTER_CONFIG_8K_Q15];
+extern const uint32_t mfcc_filter_len_config_8k_q15[NB_MFCC_NB_FILTER_CONFIG_8K_Q15];
+
 #define NB_MFCC_NB_FILTER_CONFIG3_Q31 20
 extern const uint32_t mfcc_filter_pos_config3_q31[NB_MFCC_NB_FILTER_CONFIG3_Q31];
 extern const uint32_t mfcc_filter_len_config3_q31[NB_MFCC_NB_FILTER_CONFIG3_Q31];
@@ -171,6 +175,11 @@ extern const float32_t mfcc_filter_coefs_config3_f32[NB_MFCC_FILTER_COEFS_CONFIG
 
 #define NB_MFCC_FILTER_COEFS_CONFIG_8K_F32 236
 extern const float32_t mfcc_filter_coefs_config_8k_f32[NB_MFCC_FILTER_COEFS_CONFIG_8K_F32];
+
+
+
+#define NB_MFCC_FILTER_COEFS_CONFIG_8K_Q15 236
+extern const q15_t mfcc_filter_coefs_config_8k_q15[NB_MFCC_FILTER_COEFS_CONFIG_8K_Q15];
 
 
 

@@ -7,11 +7,9 @@
 #include "svm_params.h"
 
 // Contextos para cada clasificador SVM "Uno vs el Resto"
-static arm_svm_polynomial_instance_f32 svm_a_ctx;
-static arm_svm_polynomial_instance_f32 svm_e_ctx;
-static arm_svm_polynomial_instance_f32 svm_i_ctx;
-static arm_svm_polynomial_instance_f32 svm_o_ctx;
-static arm_svm_polynomial_instance_f32 svm_u_ctx;
+static arm_svm_polynomial_instance_f32 svm_blue_ctx;
+static arm_svm_polynomial_instance_f32 svm_green_ctx;
+static arm_svm_polynomial_instance_f32 svm_red_ctx;
 
 // Arreglo para poder iterar fácilmente los contextos SVM durante la predicción
 static arm_svm_polynomial_instance_f32* svm_ctx_array[NB_CLASSIFIERS];
@@ -21,67 +19,43 @@ static arm_svm_polynomial_instance_f32* svm_ctx_array[NB_CLASSIFIERS];
  */
 void clasificador_svm_init(void)
 {
-    // a vs rest
-    arm_svm_polynomial_init_f32(&svm_a_ctx,
-                                NB_SV_A_VS_REST,
+    // blue vs rest
+    arm_svm_polynomial_init_f32(&svm_blue_ctx,
+                                NB_SV_BLUE_VS_REST,
                                 VECTOR_DIMENSION,
-                                INTERCEPT_A_VS_REST,
-                                dualCoefficients_a_vs_rest,
-                                supportVectors_a_vs_rest,
-                                classes_a_vs_rest,
+                                INTERCEPT_BLUE_VS_REST,
+                                dualCoefficients_blue_vs_rest,
+                                supportVectors_blue_vs_rest,
+                                classes_blue_vs_rest,
                                 1, /* degree */
                                 0.0f, /* coef0 */
                                 1.0f /* gamma */);
-    // e vs rest
-    arm_svm_polynomial_init_f32(&svm_e_ctx,
-                                NB_SV_E_VS_REST,
+    // green vs rest
+    arm_svm_polynomial_init_f32(&svm_green_ctx,
+                                NB_SV_GREEN_VS_REST,
                                 VECTOR_DIMENSION,
-                                INTERCEPT_E_VS_REST,
-                                dualCoefficients_e_vs_rest,
-                                supportVectors_e_vs_rest,
-                                classes_e_vs_rest,
+                                INTERCEPT_GREEN_VS_REST,
+                                dualCoefficients_green_vs_rest,
+                                supportVectors_green_vs_rest,
+                                classes_green_vs_rest,
                                 1, /* degree */
                                 0.0f, /* coef0 */
                                 1.0f /* gamma */);    
-    // i vs rest
-    arm_svm_polynomial_init_f32(&svm_i_ctx,
-                                NB_SV_I_VS_REST,
+    // red vs rest
+    arm_svm_polynomial_init_f32(&svm_red_ctx,
+                                NB_SV_RED_VS_REST,
                                 VECTOR_DIMENSION,
-                                INTERCEPT_I_VS_REST,
-                                dualCoefficients_i_vs_rest,
-                                supportVectors_i_vs_rest,
-                                classes_i_vs_rest,
-                                1, /* degree */
-                                0.0f, /* coef0 */
-                                1.0f /* gamma */);
-    // o vs rest
-    arm_svm_polynomial_init_f32(&svm_o_ctx,
-                                NB_SV_O_VS_REST,
-                                VECTOR_DIMENSION,
-                                INTERCEPT_O_VS_REST,
-                                dualCoefficients_o_vs_rest,
-                                supportVectors_o_vs_rest,
-                                classes_o_vs_rest,
-                                1, /* degree */
-                                0.0f, /* coef0 */
-                                1.0f /* gamma */);
-    // u vs rest
-    arm_svm_polynomial_init_f32(&svm_u_ctx,
-                                NB_SV_U_VS_REST,
-                                VECTOR_DIMENSION,
-                                INTERCEPT_U_VS_REST,
-                                dualCoefficients_u_vs_rest,
-                                supportVectors_u_vs_rest,
-                                classes_u_vs_rest,
+                                INTERCEPT_RED_VS_REST,
+                                dualCoefficients_red_vs_rest,
+                                supportVectors_red_vs_rest,
+                                classes_red_vs_rest,
                                 1, /* degree */
                                 0.0f, /* coef0 */
                                 1.0f /* gamma */);
                         
-    svm_ctx_array[0] = &svm_a_ctx;
-    svm_ctx_array[1] = &svm_e_ctx;
-    svm_ctx_array[2] = &svm_i_ctx;
-    svm_ctx_array[3] = &svm_o_ctx;
-    svm_ctx_array[4] = &svm_u_ctx;
+    svm_ctx_array[0] = &svm_blue_ctx;
+    svm_ctx_array[1] = &svm_green_ctx;
+    svm_ctx_array[2] = &svm_red_ctx;
 }
 
 /**

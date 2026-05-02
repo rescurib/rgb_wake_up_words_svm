@@ -27,6 +27,10 @@ def main():
         # Derive label directly from filename: mfcc_a.npy → 'a'
         label = data_file.replace("mfcc_", "").replace(".npy", "")
         X = np.load(data_file)
+
+        # Remove first sample (button press noise)
+        X = X[1:]   
+
         all_X.append(X)
         all_labels.extend([label] * len(X))
         print(f"Loaded {X.shape[0]} samples for label '{label}'.")
@@ -40,14 +44,25 @@ def main():
     X_pca = pca.fit_transform(X_combined)
 
     plt.figure(figsize=(8, 6))
+    color_map = {
+        'red': 'red',
+        'green': 'green',
+        'blue': 'blue',
+        'yellow': 'yellow',
+        'purple': 'purple',
+        'orange': 'orange',
+        'pink': 'pink',
+        'cyan': 'cyan'
+    }
     for lbl in sorted(set(labels_combined)):
         idx = labels_combined == lbl
-        plt.scatter(X_pca[idx, 0], X_pca[idx, 1], label=lbl, alpha=0.7)
+        color = color_map.get(lbl, None)  # Use mapped color or default
+        plt.scatter(X_pca[idx, 0], X_pca[idx, 1], label=lbl, alpha=0.7, color=color)
 
-    plt.title("Proyección PCA de características MFCC")
-    plt.xlabel("Componente Principal 1")
-    plt.ylabel("Componente Principal 2")
-    plt.legend(title="Etiqueta", loc="best")
+    plt.title("PCA Projection of MFCC Features")
+    plt.xlabel("Principal Component 1")
+    plt.ylabel("Principal Component 2")
+    plt.legend(title="Label", loc="best")
     plt.grid(True)
     plt.tight_layout()
     plt.show()

@@ -36,10 +36,9 @@
 
 /******** Definiciones ******** */
 #define SAMPLES_PER_HOP 256U /**< @brief 32 ms a 8 kHz */
-#define HOPS_PER_FRAME 8U    /**< @brief Duración total del frame de 256 ms a 8 kHz */
-#define FULL_BUFFER_SIZE (SAMPLES_PER_HOP * HOPS_PER_FRAME) /**< @brief 256 ms de audio a 8 kHz */
-
-#define NOISE_ALPHA 0.01f /**< @brief Coeficiente para la actualización del nivel de ruido (suavizado exponencial) */
+#define HOPS_PER_FRAME   16U /**< @brief Duración total del frame de 512 ms a 8 kHz */
+#define FULL_BUFFER_SIZE (SAMPLES_PER_HOP * HOPS_PER_FRAME) /**< @brief 512 ms de audio a 8 kHz */
+#define NOISE_ALPHA (q15_t)(0.01f * 32768)
 
 /**
  * @brief Estructura para el envío de datos en flotante por UART.
@@ -56,17 +55,19 @@ static volatile bool is_recording = false;
 static uint8_t i2s_stereo_samples[SAMPLES_PER_HOP * 2 * 4]; /**< @brief Dos canales, 4 bytes por muestra. */
 static uint8_t sample_buff[SAMPLES_PER_HOP * 2 * 4];        /**< @brief Buffer para un hop de muestras mono (32 ms). */
 static float32_t full_buff[FULL_BUFFER_SIZE];               /**< @brief 256 ms de muestras mono a 8 kHz. */
-static float32_t hop[SAMPLES_PER_HOP];                      /**< @brief Buffer del hop actual. */
+static q15_t hop[SAMPLES_PER_HOP];                      /**< @brief Buffer del hop actual. */
 
-// Matriz MFCC para el frame [8 hops]
-float32_t mfcc_matrix[HOPS_PER_FRAME][MFCC_COEFFS_NUM]; 
+// Matriz MFCC para el frame
+q15_t mfcc_matrix[HOPS_PER_FRAME][MFCC_COEFFS_NUM]; 
+q15_t delta_mfcc_matrix[HOPS_PER_FRAME][MFCC_COEFFS_NUM];
 
 // Promedio y varianza de los coeficientes MFCC del frame actual.
-#define FEATURE_VECTOR_SIZE (2 * MFCC_COEFFS_NUM) /**< @brief Media + varianza para cada coeficiente */
-static float32_t feature_vector[FEATURE_VECTOR_SIZE]; 
+#define FEATURE_VECTOR_SIZE (2 * MFCC_COEFFS_NUM * HOPS_PER_FRAME) /**< @brief Vector de características final con MFCCs y Delta-MFCCs intercalados. */
+static q15_t feature_vector_q15[FEATURE_VECTOR_SIZE]; 
+static float32_t feature_vector_f32[FEATURE_VECTOR_SIZE];
 
 // Variables globales
-float32_t g_noise_floor =  0.01f; /**< @brief Valor inicial del ruido de fondo (RMS) */
+q15_t g_noise_floor = (q15_t)(0.01f * 32768); // Initial background noise floor value (RMS)
 volatile bool g_signal_detected  = false;  /**< @brief Indica si se ha detectado una señal por encima del umbral de ruido */
 volatile bool g_dma_data_ready   = false;  /**< @brief Indica si la transferencia DMA se ha completado */
 
@@ -78,6 +79,7 @@ extern UART_HandleTypeDef huart2;
 static void mic_start(void);
 static void mic_stop(void);
 static inline float32_t i2s_sample_to_float32(uint8_t* sample);
+static inline q15_t i2s_sample_to_q15(uint8_t *sample);
 static inline void q8_7_to_float32(float32_t *dst, const q15_t *src, uint32_t length);
 
 /**
@@ -122,37 +124,45 @@ void app_run(void)
     uint16_t hop_index = 0;
 
     // Inicializar la extracción de características MFCC y el clasificador SVM
-    mfcc_features_init();
+    mfcc_features_init_q15();
     clasificador_svm_init();
 
     while(1)
     {
         if(g_signal_detected)
         {
-            if(g_dma_data_ready && hop_index < 8) // Solo procesar si hay datos DMA listos y no hemos llenado el buffer completo
+            if(g_dma_data_ready && hop_index < HOPS_PER_FRAME) // Solo procesar si hay datos DMA listos y no hemos llenado el buffer completo
             {
                 memcpy(full_buff + (hop_index * SAMPLES_PER_HOP), hop, sizeof(hop));
                 g_dma_data_ready = false; 
 
                 // Calcular MFCCs del hop actual
                 HAL_GPIO_WritePin(GPIOA, GPIO_PIN_6, GPIO_PIN_SET);
-                mfcc_features_compute(hop, mfcc_matrix[hop_index]);
+                mfcc_features_compute_q15(hop, mfcc_matrix[hop_index]);
                 HAL_GPIO_WritePin(GPIOA, GPIO_PIN_6, GPIO_PIN_RESET);
                 hop_index++;
 
-            } else if (hop_index == 8)
+            } else if (hop_index == HOPS_PER_FRAME)
             {
-                mfcc_features_mean_and_std(&mfcc_matrix[0][0], HOPS_PER_FRAME, MFCC_COEFFS_NUM, feature_vector);
+                // Compute feature vector (MFCC + Delta MFCC) from the full frame
+                mfcc_features_build_feature_vector_q15((q15_t *)mfcc_matrix, 
+                                                       (q15_t *)delta_mfcc_matrix, 
+                                                       HOPS_PER_FRAME, 
+                                                       MFCC_COEFFS_NUM, 
+                                                       feature_vector_q15);
+
+                // Convertir el vector de características de Q15 a float32 para el clasificador SVM
+                q8_7_to_float32(feature_vector_f32, feature_vector_q15, FEATURE_VECTOR_SIZE);
 
                 // Clasificar la muestra con el modelo SVM
                 int32_t svm_result = -1;
-                clasificador_svm_predict(feature_vector, FEATURE_VECTOR_SIZE, &svm_result);
+                clasificador_svm_predict(feature_vector_f32, FEATURE_VECTOR_SIZE, &svm_result);
 
                 hop_index = 0;
                 g_signal_detected = false;
 
                 // Enviar resultado por UART
-                const char* msg = "Vocal: ";
+                const char* msg = "Palabra detectada (inicial): ";
                 if(svm_result != -1)
                 {
                     HAL_UART_Transmit(&huart2, (uint8_t*)msg, strlen(msg), 100U);
@@ -257,25 +267,27 @@ void HAL_I2S_RxCpltCallback(I2S_HandleTypeDef *hi2s)
 
     g_dma_data_ready = true; // Indica que los datos DMA están listos para ser procesados
     
-    float_packet_t result;
+    q15_t result;
 
     for (uint32_t i = 0; i < SAMPLES_PER_HOP; i++)
     {
         // Convierte la muestra del canal izquierdo (los primeros 4 bytes de cada par estéreo)
         uint8_t* sample_ptr = &sample_buff[i * 8]; // 8 bytes por muestra estéreo (4 izq, 4 der)
-        hop[i] = i2s_sample_to_float32(sample_ptr);
+        hop[i] = i2s_sample_to_q15(sample_ptr);
     }
 
-    arm_rms_f32((float32_t *)hop, SAMPLES_PER_HOP, &result.f32);
+    arm_rms_q15(hop, SAMPLES_PER_HOP, &result);
 
-    if(result.f32 > 7.5 * g_noise_floor)
+    if(result > 7.5 * g_noise_floor)
     {
         g_signal_detected = true;
     } else
     {
-        // Actualizar nivel de ruido con filtro de suivizado.
-        g_noise_floor = (1.0f - NOISE_ALPHA) * g_noise_floor +
-                    NOISE_ALPHA * result.f32;
+       // Update noise floor with exponential smoothing in Q15:
+    // equivalent to g_noise_floor = (1.0f - NOISE_ALPHA) * g_noise_floor +
+    // NOISE_ALPHA * result. Mathematically optimized to: g_noise_floor =
+    // g_noise_floor + NOISE_ALPHA * (result - g_noise_floor)
+    g_noise_floor = (q15_t)(g_noise_floor + ((((q31_t)result - g_noise_floor) * NOISE_ALPHA) >> 15));
     }
 }
 
@@ -298,6 +310,12 @@ static inline float32_t i2s_sample_to_float32(uint8_t* sample)
 
     // Convertir la muestra de 24 bits a un valor flotante en el rango [-1.0, 1.0]
     return (float32_t) (reord_sample / 8388608.0f); // Se divide por 2^23 para normalizar
+}
+
+
+static inline q15_t i2s_sample_to_q15(uint8_t *sample) 
+{
+  return (q15_t)((sample[1] << 8) | sample[0]);
 }
 
 
