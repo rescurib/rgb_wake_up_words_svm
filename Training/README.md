@@ -1,40 +1,38 @@
-# Entrenamiento del Modelo SVM
+# SVM Model Training
 
-Este directorio contiene los conjuntos de datos recopilados y los scripts de Python necesarios para analizar, entrenar y formatear las Máquinas de Vectores de Soporte (SVM) que el firmware utiliza en la tarjeta STM32.
+This directory contains the collected datasets and the Python scripts needed to analyze, train, and format the Support Vector Machines (SVM) used by the firmware on the STM32 board.
 
-## Obtención de Muestras (Dataset)
-Para recolectar tus propias muestras, el firmware original debe estar modificado o ajustado en modo de "volcado de características" (feature dump). En este modo, transmitirá crudamente los arreglos finales de parámetros MFCC (usualmente 26 datos: 13 medias y 13 desviaciones estándar de un frame) por puerto UART hacia la terminal.
+## Collecting Samples (Dataset)
+To collect your own samples, clone [this](https://github.com/rescurib/mfcc_mic_recorder) repository. That firmware will send a feature vector of a sequence of 16 hops every time you speak into the microphone.
 
-1. He dejado listo este modo en un _tag_ específico de Git y puedes hacer "checkout" de la siguiente manera para obtenerlo:
-   ```bash
-   git checkout mfcc_sampler
-   ```
-2. Compila ese firmware temporal, flashea tu placa, y conéctala a la PC.
-3. Utiliza el script `serial_to_features.py` (ubicado en el _directorio raíz_ del proyecto) para capturar la ráfaga de datos flotantes entrantes por UART y aglomerarlos en archivos `.npy`. Por ejemplo:
-   ```bash
-   python serial_to_features.py --output Training/mfcc_a.npy
-   ```
-   *Deberás repetir este proceso y renombrar el parámetro `--output` para cada clase nueva que desees grabar.*
+Use the `serial_to_features.py` script (located in the _root directory_ of the project) to capture the incoming burst of floating-point data via UART and aggregate them into `.npy` files.
 
-## Entrenando el Modelo (`train_svm_mfcc.py`)
-Una vez tengas los archivos recolectados en este directorio (por ejemplo: `mfcc_a.npy`, `mfcc_e.npy`, `mfcc_i.npy`, `mfcc_o.npy`, `mfcc_u.npy`), estás listo para lanzar el script principal de entrenamiento:
+For example:
+
+```bash
+python serial_to_features.py --output Training/mfcc_blue.npy
+```
+*You should repeat this process and rename the `--output` parameter for each new class you want to record.*
+
+## Training the Model (`train_svm_mfcc.py`)
+Once you have the collected files in this directory (for example: `mfcc_a.npy`, `mfcc_e.npy`, `mfcc_i.npy`, `mfcc_o.npy`, `mfcc_u.npy`), you are ready to run the main training script:
 
 ```bash
 python train_svm_mfcc.py
 ```
 
-### ¿Cómo funciona internamente `train_svm_mfcc.py`?
-1. **Carga Automática**: Busca cualquier archivo nominado como `mfcc_*.npy` dentro de este directorio. Los concatena verticalmente y les asigna su propia etiqueta de texto leyendo dinámicamente el nombre del archivo.
-2. **Lineal SVM bajo la regla OVR**: Como la librería CMSIS-DSP es eficiente evaluando modelos lineales binarios, Python divide el problema Multiclase usando `OneVsRestClassifier` instanciando `LinearSVC` desde _Scikit-Learn_. Generará internamente $N$ clasificadores independientes.
-3. **Métricas del Modelo**: Evalúa y divide el conjunto de datos (80% entrenamiento, 20% prueba), e imprime por consola un reporte detallado de precisión y recuperación (Accuracy & Recall).
-4. **Renderización de Cabecera C**: Extrae matemáticamente la configuración geométrica de los modelos entrenados (.coef_ e .intercept_) y construye/formatea arreglos constantes en lenguaje C. Por último, guarda e imprime el archivo **`svm_params.h`**, que es exactamente el mismo que importa `clasificador_svm.c` en el firmware.
+### How does `train_svm_mfcc.py` work internally?
+1. **Automatic Loading**: It searches for any file named `mfcc_*.npy` within this directory. It concatenates them vertically and assigns each its own text label by dynamically reading the file name.
+2. **Linear SVM under OVR rule**: Since the CMSIS-DSP library is efficient at evaluating binary linear models, Python splits the multiclass problem using `OneVsRestClassifier` instantiating `LinearSVC` from _Scikit-Learn_. It will internally generate $N$ independent classifiers.
+3. **Model Metrics**: It evaluates and splits the dataset (80% training, 20% testing), and prints a detailed accuracy and recall report to the console.
+4. **C Header Rendering**: It mathematically extracts the geometric configuration of the trained models (.coef_ and .intercept_) and builds/formats constant arrays in C language. Finally, it saves and prints the **`svm_params.h`** file, which is exactly the same one imported by `clasificador_svm.c` in the firmware.
 
-## Visualización (`plot_mfcc_pca.py`)
-Para constatar la calidad de nuestro dataset o audios recuperados, puedes ejecutar este script auxiliar de visualización:
+## Visualization (`plot_mfcc_pca.py`)
+To check the quality of your dataset or recovered audios, you can run this auxiliary visualization script:
 ```bash
 python plot_mfcc_pca.py
 ```
-El script leerá los archivos en el mismo formato, los estandarizará, y aplicará Análisis de Componentes Principales (PCA) para comprimir la dimensionalidad geométrica y mostrarte una figura en 2D. Con esto, confirmarás visualmente si las vocales capturadas logran agruparse (ser separables) en el espectro MFCC:
+The script will read the files in the same format, standardize them, and apply Principal Component Analysis (PCA) to compress the geometric dimensionality and show you a 2D figure. With this, you can visually confirm if the captured vowels manage to group (be separable) in the MFCC spectrum. Here is an example I made for the vowels:
 
 <p align="center">
 <img src="https://drive.google.com/uc?export=view&id=1SPOT91A9TNcxonFPD9OUkRUxNS6wCCrs" width="500">
