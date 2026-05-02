@@ -60,6 +60,8 @@ The system is configured for a **8 kHz** sampling frequency.
 - **Signal detection threshold**: 7.5 X noise level (RMS)
 - **Noise filter**: Exponential smoothing with alpha = 0.01
 
+See [Training README](https://github.com/rescurib/rgb_wake_up_words_svm/tree/main/Training#readme) for SVM model generation, training and dataset creation.
+
 ## Usage
 
 1. **Compile and flash** the firmware to the microcontroller using STM32CubeIDE.
