@@ -1,6 +1,6 @@
 /**
  * @file mfcc_features.h
- * @brief Cabecera para la abstracción de extracción de características MFCC.
+ * @brief Header for MFCC feature extraction abstraction.
  */
 
 #ifndef MFCC_FEATURES_H
@@ -9,20 +9,20 @@
 #include <stdint.h>
 #include <arm_math.h>
 
-/** @brief Número de coeficientes MFCC a extraer */
+/** @brief Number of MFCC coefficients to extract */
 #define MFCC_COEFFS_NUM 13U
 
 /**
- * @brief Inicializa el módulo de extracción MFCC.
+ * @brief Initializes the MFCC extraction module.
  */
 void mfcc_features_init(void);
 void mfcc_features_init_f32(void);
 void mfcc_features_init_q15(void);
 
 /**
- * @brief  Calcula las características MFCC sobre un bloque de audio.
- * @param  audio_buffer Puntero al bloque de audio entrante.
- * @param  out_buffer   Puntero al buffer donde se guardarán los resultados MFCC.
+ * @brief  Computes MFCC features over an audio block.
+ * @param  audio_buffer Pointer to the incoming audio block.
+ * @param  out_buffer   Pointer to the buffer where MFCC results will be stored.
  */
 void mfcc_features_compute(float32_t *audio_buffer, float32_t *out_buffer);
 void mfcc_features_compute_q15(q15_t *audio_buffer, q15_t *out_buffer);
@@ -32,11 +32,11 @@ void compute_delta_mfcc_q15(const q15_t *mfcc_mat, q15_t *delta_mat, uint32_t nu
 void interleave_mfcc_delta_q15(const q15_t *mfcc_mat, const q15_t *delta_mat, uint32_t num_hops, uint32_t num_coeffs, q15_t *feature_vector);
 
 /**
- * @brief  Calcula la media y desviación estándar de una matriz de vectores MFCC.
- * @param  mfcc_matrix    Puntero a la matriz que contiene los vectores MFCC para todos los frames.
- * @param  num_hops       Cantidad de frames (hops) en la matriz.
- * @param  num_coeffs     Número de coeficientes MFCC por frame.
- * @param  feature_vector Vector destino para guardar primero las medias y luego las desviaciones estándar.
+ * @brief  Computes the mean and standard deviation of a matrix of MFCC vectors.
+ * @param  mfcc_matrix    Pointer to the matrix containing MFCC vectors for all frames.
+ * @param  num_hops       Number of frames (hops) in the matrix.
+ * @param  num_coeffs     Number of MFCC coefficients per frame.
+ * @param  feature_vector Destination vector to store first the means and then the standard deviations.
  */
 void mfcc_features_mean_and_std(float32_t *mfcc_matrix, uint32_t num_hops, uint32_t num_coeffs, float32_t *feature_vector);
 

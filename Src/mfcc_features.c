@@ -1,24 +1,23 @@
 /**
  * @file mfcc_features.c
- * @brief Implementación de las funciones de extracción de MFCC.
+ * @brief Implementation of MFCC feature extraction functions.
  */
 
 #include "mfcc_features.h"
 #include "mfcc_config.h"
-#include <string.h>
 
-#define FFT_SIZE 256U /**< @brief Tamaño de la Transformada Rápida de Fourier (FFT) para MFCC */
+#define FFT_SIZE 256U /**< @brief FFT size for MFCC */
 
-// Instancia global para almacenar el contexto del MFCC
+// Global instance to store the MFCC context
 static arm_mfcc_instance_f32 mfcc_ctx;
 static arm_mfcc_instance_q15 mfcc_ctx_q15;
 
-// Buffer interno utilizado durante el cálculo MFCC por CMSIS-DSP
+// Internal buffer used during MFCC calculation by CMSIS-DSP
 static float32_t mfcc_complex_buff[2 * FFT_SIZE];
 static q31_t mfcc_complex_buff_q31[2 * FFT_SIZE];
 
 /**
- * @brief Inicializa el extractor de características MFCC utilizando los parámetros precomputados.
+ * @brief Initializes the MFCC feature extractor using precomputed parameters.
  */
 void mfcc_features_init_f32(void)
 {
@@ -43,9 +42,9 @@ void mfcc_features_init_q15(void)
 }
 
 /**
- * @brief  Ejecuta la extracción de MFCC a partir de la muestra de audio.
- * @param  audio_buffer Puntero al bloque de la señal de audio.
- * @param  out_buffer   Puntero al inicio del buffer que contendrá los coeficientes calculados.
+ * @brief  Executes MFCC extraction from the audio sample.
+ * @param  audio_buffer Pointer to the audio signal block.
+ * @param  out_buffer   Pointer to the start of the buffer that will contain the calculated coefficients.
  */
 void mfcc_features_compute(float32_t *audio_buffer, float32_t *out_buffer)
 {
@@ -53,9 +52,9 @@ void mfcc_features_compute(float32_t *audio_buffer, float32_t *out_buffer)
 }
 
 /**
- * @brief  Ejecuta la extracción de MFCC a partir de la muestra de audio.
- * @param  audio_buffer Puntero al bloque de la señal de audio.
- * @param  out_buffer   Puntero al inicio del buffer que contendrá los coeficientes calculados.
+ * @brief  Executes MFCC extraction from the audio sample.
+ * @param  audio_buffer Pointer to the audio signal block.
+ * @param  out_buffer   Pointer to the start of the buffer that will contain the calculated coefficients.
  */
 void mfcc_features_compute_q15(q15_t *audio_buffer, q15_t *out_buffer)
 {
@@ -80,11 +79,11 @@ void mfcc_features_build_feature_vector_q15(q15_t *mfcc_mat, q15_t *delta_mfcc_m
 }
 
 /**
- * @brief  Computa la media y la desviación estándar para condensar varios frames MFCC en un único vector.
- * @param  mfcc_mat       Puntero lineal a la matriz de resultados MFCC de tamaño [num_hops][num_coeffs].
- * @param  num_hops       El total de iteraciones / subdivisiones (hops) capturadas.
- * @param  num_coeffs     La cantidad de coeficientes que se extraen por frame.
- * @param  feature_vector Salida final con medias seguidas de desviaciones estándar.
+ * @brief  Computes the mean and standard deviation to condense several MFCC frames into a single vector.
+ * @param  mfcc_mat       Linear pointer to the MFCC result matrix of size [num_hops][num_coeffs].
+ * @param  num_hops       The total number of iterations/subdivisions (hops) captured.
+ * @param  num_coeffs     The number of coefficients extracted per frame.
+ * @param  feature_vector Final output with means followed by standard deviations.
  */
 void mfcc_features_mean_and_std(float32_t *mfcc_mat, uint32_t num_hops, uint32_t num_coeffs, float32_t *feature_vector)
 {
@@ -152,7 +151,7 @@ void interleave_mfcc_delta_q15(const q15_t *mfcc_mat, const q15_t *delta_mat, ui
 {
   for (uint32_t t = 0; t < num_hops; t++) 
   {
-    memcpy(&feature_vector[t * 2 * num_coeffs], &mfcc_mat[t * num_coeffs], num_coeffs * sizeof(q15_t));
-    memcpy(&feature_vector[t * 2 * num_coeffs + num_coeffs], &delta_mat[t * num_coeffs], num_coeffs * sizeof(q15_t));
+    arm_copy_q15(&mfcc_mat[t * num_coeffs], &feature_vector[t * 2 * num_coeffs], num_coeffs);
+    arm_copy_q15(&delta_mat[t * num_coeffs], &feature_vector[t * 2 * num_coeffs + num_coeffs], num_coeffs);
   }
 }

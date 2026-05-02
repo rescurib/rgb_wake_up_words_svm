@@ -1,23 +1,29 @@
 #if 0
 /**
  * @file app.c
- * @brief Proyecto de ejemplo que demuestra la adquisición de audio I2S desde un micrófono MEMS INMP441.
+ * @brief Example project for real-time audio acquisition and wake word detection using I2S MEMS microphone and SVM classification on STM32F3.
  *
- * Este ejemplo muestra cómo usar el periférico I2S del STM32 en modo DMA para adquirir datos
- * de audio de un micrófono MEMS digital INMP441. Las muestras adquiridas se pueden enviar por UART para
- * procesamiento adicional o visualización en una PC. La grabación se controla mediante el botón de usuario
- * (B1), y un LED de estado indica el estado actual de la adquisición.
+ * This project demonstrates how to acquire audio from a digital MEMS microphone (INMP441) using the STM32 I2S peripheral in DMA mode, extract MFCC features, and classify wake words using an SVM model. Audio samples are processed in real time, and results are sent via UART for monitoring or further processing. Recording is controlled by the user button (B1), and a status LED (LD2) indicates the current acquisition state.
+ *
+ * Features:
+ *   - Real-time audio acquisition from MEMS microphone (INMP441, I2S interface)
+ *   - DMA-based I2S data transfer for efficient sampling
+ *   - MFCC and Delta-MFCC feature extraction
+ *   - SVM-based wake word classification (multi-class, one-vs-rest)
+ *   - UART output for detected words and system status
+ *   - User button (B1) to start/stop recording
+ *   - Status LED (LD2) for acquisition state
  *
  * Hardware:
- *   - MCU de la serie STM32F3
- *   - Micrófono MEMS INMP441 (Interfaz I2S)
- *   - UART para salida en serie (460800 Bits/s)
- *   - Botón de usuario (B1) para iniciar/detener
- *   - LED de estado (LD2)
+ *   - STM32F3 series MCU
+ *   - INMP441 MEMS microphone (I2S interface)
+ *   - UART for serial output (460800 Bits/s)
+ *   - User button (B1)
+ *   - Status LED (LD2)
  *
- * Uso:
- *   - Presione el botón de usuario para iniciar o detener la adquisición de audio.
- *   - Las muestras de audio se transmiten por UART en un formato binario simple o se procesan.
+ * Usage:
+ *   - Press the user button to start or stop audio acquisition.
+ *   - Detected words are sent via UART in a simple format.
  */
 #endif
 
@@ -29,101 +35,119 @@
 #include <string.h>
 #include <stdio.h>
 
-// Inclusiones de CMSIS-DSP y extracción modular
+// CMSIS-DSP and feature extraction includes
 #include <arm_math.h>
 #include "mfcc_features.h"
 #include "clasificador_svm.h"
 
-/******** Definiciones ******** */
-#define SAMPLES_PER_HOP 256U /**< @brief 32 ms a 8 kHz */
-#define HOPS_PER_FRAME   16U /**< @brief Duración total del frame de 512 ms a 8 kHz */
-#define FULL_BUFFER_SIZE (SAMPLES_PER_HOP * HOPS_PER_FRAME) /**< @brief 512 ms de audio a 8 kHz */
+
+/******** Definitions ******** */
+#define SAMPLES_PER_HOP 256U /**< @brief 32 ms at 8 kHz */
+#define HOPS_PER_FRAME   16U /**< @brief Total frame duration: 512 ms at 8 kHz */
+#define FULL_BUFFER_SIZE (SAMPLES_PER_HOP * HOPS_PER_FRAME) /**< @brief 512 ms of audio at 8 kHz */
 #define NOISE_ALPHA (q15_t)(0.01f * 32768)
 
 /**
- * @brief Estructura para el envío de datos en flotante por UART.
+ * @brief Structure for sending float data via UART.
  */
 typedef union {
     float32_t f32;
     uint8_t b[4];
 } float_packet_t;
 
-// Indica si el micrófono está grabando actualmente
+// Indicates if the microphone is currently recording
 static volatile bool is_recording = false;
 
-// Buffers para muestras estéreo I2S (2 palabras para los canales izquierdo y derecho)
-static uint8_t i2s_stereo_samples[SAMPLES_PER_HOP * 2 * 4]; /**< @brief Dos canales, 4 bytes por muestra. */
-static uint8_t sample_buff[SAMPLES_PER_HOP * 2 * 4];        /**< @brief Buffer para un hop de muestras mono (32 ms). */
-static float32_t full_buff[FULL_BUFFER_SIZE];               /**< @brief 256 ms de muestras mono a 8 kHz. */
-static q15_t hop[SAMPLES_PER_HOP];                      /**< @brief Buffer del hop actual. */
 
-// Matriz MFCC para el frame
+// Buffers for I2S stereo samples (2 words for left and right channels)
+static uint8_t i2s_stereo_samples[SAMPLES_PER_HOP * 2 * 4]; /**< @brief Two channels, 4 bytes per sample. */
+static uint8_t sample_buff[SAMPLES_PER_HOP * 2 * 4];        /**< @brief Buffer for one hop of mono samples (32 ms). */
+static float32_t full_buff[FULL_BUFFER_SIZE];               /**< @brief 256 ms of mono samples at 8 kHz. */
+static q15_t hop[SAMPLES_PER_HOP];                          /**< @brief Buffer for the current hop. */
+
+
+// MFCC and Delta-MFCC matrices for the frame
 q15_t mfcc_matrix[HOPS_PER_FRAME][MFCC_COEFFS_NUM]; 
 q15_t delta_mfcc_matrix[HOPS_PER_FRAME][MFCC_COEFFS_NUM];
 
-// Promedio y varianza de los coeficientes MFCC del frame actual.
-#define FEATURE_VECTOR_SIZE (2 * MFCC_COEFFS_NUM * HOPS_PER_FRAME) /**< @brief Vector de características final con MFCCs y Delta-MFCCs intercalados. */
+
+// Final feature vector with interleaved MFCCs and Delta-MFCCs
+#define FEATURE_VECTOR_SIZE (2 * MFCC_COEFFS_NUM * HOPS_PER_FRAME) /**< @brief Final feature vector with interleaved MFCCs and Delta-MFCCs. */
 static q15_t feature_vector_q15[FEATURE_VECTOR_SIZE]; 
 static float32_t feature_vector_f32[FEATURE_VECTOR_SIZE];
 
-// Variables globales
-q15_t g_noise_floor = (q15_t)(0.01f * 32768); // Initial background noise floor value (RMS)
-volatile bool g_signal_detected  = false;  /**< @brief Indica si se ha detectado una señal por encima del umbral de ruido */
-volatile bool g_dma_data_ready   = false;  /**< @brief Indica si la transferencia DMA se ha completado */
 
-// Manejadores externos para I2S y UART (definidos en otra parte)
+// Global variables
+q15_t g_noise_floor = (q15_t)(0.01f * 32768); // Initial background noise floor value (RMS)
+volatile bool g_signal_detected  = false;  /**< @brief Indicates if a signal above the noise threshold has been detected */
+volatile bool g_dma_data_ready   = false;  /**< @brief Indicates if the DMA transfer has completed */
+
+
+// External handlers for I2S and UART (defined elsewhere)
 extern I2S_HandleTypeDef hi2s2;
 extern UART_HandleTypeDef huart2;
 
-// Prototipos de funciones internas
+
+// Internal function prototypes
+/**
+ * @brief Start microphone acquisition using I2S DMA.
+ */
 static void mic_start(void);
+/**
+ * @brief Stop microphone and DMA acquisition.
+ */
 static void mic_stop(void);
+/**
+ * @brief Convert a byte array to a 32-bit floating-point audio sample.
+ * @param sample Pointer to the raw sample (8 bytes).
+ * @return 32-bit float sample normalized to [-1.0, 1.0].
+ */
 static inline float32_t i2s_sample_to_float32(uint8_t* sample);
+/**
+ * @brief Convert a byte array to a Q15 audio sample.
+ * @param sample Pointer to the raw sample (8 bytes).
+ * @return Q15 sample.
+ */
 static inline q15_t i2s_sample_to_q15(uint8_t *sample);
+/**
+ * @brief Convert an array of Q8.7 fixed-point values to float32.
+ * @param dst Destination float array.
+ * @param src Source Q15 array.
+ * @param length Number of elements.
+ */
 static inline void q8_7_to_float32(float32_t *dst, const q15_t *src, uint32_t length);
 
 /**
- * @brief  Actualiza el LED de estado para indicar el estado de la grabación.
- * @param  recording Verdadero si está grabando, falso en caso contrario.
+ * @brief  Update the status LED to indicate the recording state.
+ * @param  recording True if recording, false otherwise.
  */
 static inline void update_status_led(bool recording)
 {
     if (recording)
     {
-        // Enciende el LED de estado (ej. LD2)
+        // Turn on the status LED (e.g. LD2)
         HAL_GPIO_WritePin(LD2_GPIO_Port, LD2_Pin, GPIO_PIN_SET);
     }
     else
     {
-        // Apaga el LED de estado
+        // Turn off the status LED
         HAL_GPIO_WritePin(LD2_GPIO_Port, LD2_Pin, GPIO_PIN_RESET);
     }
 }
 
 /**
- * @brief  Bucle principal de la aplicación.
- *         Maneja la inicialización y procesa la señal de audio capturada.
+ * @brief  Main application loop.
+ *         Handles initialization and processes the captured audio signal.
  */
 void app_run(void)
 {
-
-	// Habilitar reloj de GPIOA e inicializar PA6 temporalmente para el osciloscopio
-	  __HAL_RCC_GPIOA_CLK_ENABLE();
-	  GPIO_InitTypeDef GPIO_InitStruct = {0};
-	  GPIO_InitStruct.Pin = GPIO_PIN_6;
-	  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
-	  GPIO_InitStruct.Pull = GPIO_NOPULL;
-	  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_HIGH;
-	  HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
-	  HAL_GPIO_WritePin(GPIOA, GPIO_PIN_6, GPIO_PIN_RESET);
-
-    // Inicialización del estado
+    // State initialization
     is_recording = false;
     update_status_led(is_recording);
     memset(i2s_stereo_samples, 0, sizeof(i2s_stereo_samples));
     uint16_t hop_index = 0;
 
-    // Inicializar la extracción de características MFCC y el clasificador SVM
+    // Initialize MFCC feature extraction and SVM classifier
     mfcc_features_init_q15();
     clasificador_svm_init();
 
@@ -131,15 +155,13 @@ void app_run(void)
     {
         if(g_signal_detected)
         {
-            if(g_dma_data_ready && hop_index < HOPS_PER_FRAME) // Solo procesar si hay datos DMA listos y no hemos llenado el buffer completo
+            if(g_dma_data_ready && hop_index < HOPS_PER_FRAME) // Only process if DMA data is ready and the buffer is not full
             {
                 memcpy(full_buff + (hop_index * SAMPLES_PER_HOP), hop, sizeof(hop));
                 g_dma_data_ready = false; 
 
-                // Calcular MFCCs del hop actual
-                HAL_GPIO_WritePin(GPIOA, GPIO_PIN_6, GPIO_PIN_SET);
+                // Compute MFCCs for the current hop
                 mfcc_features_compute_q15(hop, mfcc_matrix[hop_index]);
-                HAL_GPIO_WritePin(GPIOA, GPIO_PIN_6, GPIO_PIN_RESET);
                 hop_index++;
 
             } else if (hop_index == HOPS_PER_FRAME)
@@ -151,18 +173,18 @@ void app_run(void)
                                                        MFCC_COEFFS_NUM, 
                                                        feature_vector_q15);
 
-                // Convertir el vector de características de Q15 a float32 para el clasificador SVM
+                // Convert the feature vector from Q15 to float32 for the SVM classifier
                 q8_7_to_float32(feature_vector_f32, feature_vector_q15, FEATURE_VECTOR_SIZE);
 
-                // Clasificar la muestra con el modelo SVM
+                // Classify the sample with the SVM model
                 int32_t svm_result = -1;
                 clasificador_svm_predict(feature_vector_f32, FEATURE_VECTOR_SIZE, &svm_result);
 
                 hop_index = 0;
                 g_signal_detected = false;
 
-                // Enviar resultado por UART
-                const char* msg = "Palabra detectada (inicial): ";
+                // Send result via UART
+                const char* msg = "Detected word (initial): ";
                 if(svm_result != -1)
                 {
                     HAL_UART_Transmit(&huart2, (uint8_t*)msg, strlen(msg), 100U);
@@ -175,63 +197,60 @@ void app_run(void)
 }
 
 /**
- * @brief  Inicia la adquisición del micrófono utilizando I2S DMA.
- *         Actualiza el estado y notifica mediante UART.
+ * @brief  Start microphone acquisition using I2S DMA. Updates state and notifies via UART.
  */
 static void mic_start(void)
 {
     if (!is_recording)
     {
-        /* Inicia la recepción de DMA de I2S (2 palabras, 24 bits cada una)
-           El argumento del tamaño es uint16_t*, pero la API HAL lo espera así para formatos de 24 o 32 bits.
-        */
+          /* Start I2S DMA reception (2 words, 24 bits each)
+              The size argument is uint16_t*, as required by the HAL API for 24/32-bit formats.
+          */
         if (HAL_I2S_Receive_DMA(&hi2s2, (uint16_t*)i2s_stereo_samples, 2 * SAMPLES_PER_HOP) == HAL_OK)
         {
            is_recording = true;
            update_status_led(is_recording);
 
-           // Notificar que la adquisición ha comenzado
-           const char* msg = "Microfono encendido\r\n";
+           // Notify that acquisition has started
+           const char* msg = "Microphone ON\r\n";
            HAL_UART_Transmit(&huart2, (uint8_t*)msg, strlen(msg), 100U);
         } 
         else 
         {
-           // Notificar error
-           const char* error_msg = "Error en adquisicion\r\n";
+           // Notify error
+           const char* error_msg = "Acquisition error\r\n";
            HAL_UART_Transmit(&huart2, (uint8_t*)error_msg, strlen(error_msg), 100U);
         }
     } 
 }
 
 /**
- * @brief  Detiene la adquisición del micrófono y de DMA.
- *         Actualiza el estado y notifica mediante UART.
+ * @brief  Stop microphone and DMA acquisition. Updates state and notifies via UART.
  */
 static void mic_stop(void)
 {
     if (is_recording)
     {
-        // Detiene el DMA de I2S
+        // Stop I2S DMA
         HAL_I2S_DMAStop(&hi2s2);
         is_recording = false;
         update_status_led(is_recording);
 
-        // Notificar que la adquisición ha finalizado
-        const char* msg = "Microfono apagado\r\n";
+        // Notify that acquisition has finished
+        const char* msg = "Microphone OFF\r\n";
         HAL_UART_Transmit(&huart2, (uint8_t*)msg, strlen(msg), 100U);
     }
 }
 
 /**
- * @brief  Llamada de retorno (callback) para la detección de línea EXTI (presión del botón).
- *         Cambia el estado de la grabación cuando se presiona el botón del usuario (B1).
- * @param  GPIO_Pin Especifica el pin conectado a la línea EXTI.
+ * @brief  Callback for EXTI line detection (button press). Changes recording state when user button (B1) is pressed.
+ * @param  GPIO_Pin Specifies the pin connected to the EXTI line.
  */
 void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
 {
     if (GPIO_Pin == B1_Pin)
     {
-        // Cambia el estado de grabación al presionar el botón
+        // Change recording state on button press
         if (is_recording)
         {
             mic_stop();
@@ -244,20 +263,19 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
 }
 
 /**
- * @brief  Llamada de retorno de finalización de recepción DMA I2S.
- *         Se invoca cuando se completa la recepción de un bloque de datos I2S.
- *         Envía las muestras recibidas al buffer por medio de un procesamiento.
- * @param  hi2s Manejador de la estructura I2S.
+ * @brief  Callback for I2S DMA reception completion. Invoked when a block of I2S data is received. Sends the received samples to the buffer for processing.
+ * @param  hi2s I2S handle structure.
  */
 void HAL_I2S_RxCpltCallback(I2S_HandleTypeDef *hi2s)
 {
-    // Solo se procesa si es nuestra instancia I2S
+
+    // Only process if it's our I2S instance
     if(hi2s->Instance != hi2s2.Instance)
     {
         return; 
     }
 
-    // Solo se procesa si se está grabando
+    // Only process if recording
     if(is_recording == false)
     {
         return; 
@@ -265,14 +283,14 @@ void HAL_I2S_RxCpltCallback(I2S_HandleTypeDef *hi2s)
 
     memcpy(sample_buff, i2s_stereo_samples, sizeof(sample_buff));
 
-    g_dma_data_ready = true; // Indica que los datos DMA están listos para ser procesados
+    g_dma_data_ready = true; // Indicates that DMA data is ready to be processed
     
     q15_t result;
 
     for (uint32_t i = 0; i < SAMPLES_PER_HOP; i++)
     {
-        // Convierte la muestra del canal izquierdo (los primeros 4 bytes de cada par estéreo)
-        uint8_t* sample_ptr = &sample_buff[i * 8]; // 8 bytes por muestra estéreo (4 izq, 4 der)
+        // Convert the left channel sample (first 4 bytes of each stereo pair)
+        uint8_t* sample_ptr = &sample_buff[i * 8]; // 8 bytes per stereo sample (4 left, 4 right)
         hop[i] = i2s_sample_to_q15(sample_ptr);
     }
 
@@ -284,17 +302,17 @@ void HAL_I2S_RxCpltCallback(I2S_HandleTypeDef *hi2s)
     } else
     {
        // Update noise floor with exponential smoothing in Q15:
-    // equivalent to g_noise_floor = (1.0f - NOISE_ALPHA) * g_noise_floor +
-    // NOISE_ALPHA * result. Mathematically optimized to: g_noise_floor =
-    // g_noise_floor + NOISE_ALPHA * (result - g_noise_floor)
-    g_noise_floor = (q15_t)(g_noise_floor + ((((q31_t)result - g_noise_floor) * NOISE_ALPHA) >> 15));
+       // equivalent to g_noise_floor = (1.0f - NOISE_ALPHA) * g_noise_floor +
+       // NOISE_ALPHA * result. Mathematically optimized to: g_noise_floor =
+       // g_noise_floor + NOISE_ALPHA * (result - g_noise_floor)
+       g_noise_floor = (q15_t)(g_noise_floor + ((((q31_t)result - g_noise_floor) * NOISE_ALPHA) >> 15));
     }
 }
 
 /**
- * @brief  Convierte un arreglo de bytes en una muestra de audio en coma flotante.
- * @param  sample Puntero a la muestra raw (8 bytes).
- * @return Muestra en punto flotante 32-bits normalizada al rango [-1.0, 1.0].
+ * @brief  Convert a byte array into a floating-point audio sample.
+ * @param  sample Pointer to the raw sample (8 bytes).
+ * @return 32-bit floating-point sample normalized to the range [-1.0, 1.0].
  */
 static inline float32_t i2s_sample_to_float32(uint8_t* sample)
 {
@@ -303,27 +321,38 @@ static inline float32_t i2s_sample_to_float32(uint8_t* sample)
                                       (sample[3]       )
 							        );
 
-    if (reord_sample & 0x00800000)   // Si el bit de signo de 24 bits está establecido
+    if (reord_sample & 0x00800000)   // If the 24-bit sign bit is set
     {
-        reord_sample |= 0xFF000000;  // Extender signo a 32 bits
+        reord_sample |= 0xFF000000;  // Sign-extend to 32 bits
     }
 
-    // Convertir la muestra de 24 bits a un valor flotante en el rango [-1.0, 1.0]
-    return (float32_t) (reord_sample / 8388608.0f); // Se divide por 2^23 para normalizar
+    // Convert the 24-bit sample to a float value in the range [-1.0, 1.0]
+    return (float32_t) (reord_sample / 8388608.0f); // Divide by 2^23 to normalize
 }
 
 
+/**
+ * @brief  Convert a byte array into a Q15 audio sample.
+ * @param  sample Pointer to the raw sample (8 bytes).
+ * @return Q15 sample.
+ */
 static inline q15_t i2s_sample_to_q15(uint8_t *sample) 
 {
-  return (q15_t)((sample[1] << 8) | sample[0]);
+    return (q15_t)((sample[1] << 8) | sample[0]);
 }
 
 
+/**
+ * @brief  Convert an array of Q8.7 fixed-point values to float32.
+ * @param  dst Destination float array.
+ * @param  src Source Q15 array.
+ * @param  length Number of elements.
+ */
 static inline void q8_7_to_float32(float32_t *dst, const q15_t *src, uint32_t length)
 {
-  // MFCC output of arm_mfcc_q15 is interprete as q8.7 fixed-point, so we need to divide by 128 to get the float value.
-  for (uint32_t i = 0; i < length; i++) 
-  {
-    dst[i] = (float32_t)(q31_t)src[i] / 128.0f; // Convert from Q8.7 to float
-  }
+    // MFCC output of arm_mfcc_q15 is interpreted as q8.7 fixed-point, so we need to divide by 128 to get the float value.
+    for (uint32_t i = 0; i < length; i++) 
+    {
+        dst[i] = (float32_t)(q31_t)src[i] / 128.0f; // Convert from Q8.7 to float
+    }
 }

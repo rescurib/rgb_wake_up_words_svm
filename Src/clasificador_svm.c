@@ -1,21 +1,21 @@
 /**
  * @file clasificador_svm.c
- * @brief Implementación de las funciones para inicializar y predecir usando SVM polinomiales.
+ * @brief Implementation of functions to initialize and predict using polynomial SVMs.
  */
 
 #include "clasificador_svm.h"
 #include "svm_params.h"
 
-// Contextos para cada clasificador SVM "Uno vs el Resto"
+// Contexts for each SVM classifier "One vs Rest"
 static arm_svm_polynomial_instance_f32 svm_blue_ctx;
 static arm_svm_polynomial_instance_f32 svm_green_ctx;
 static arm_svm_polynomial_instance_f32 svm_red_ctx;
 
-// Arreglo para poder iterar fácilmente los contextos SVM durante la predicción
+// Array to easily iterate SVM contexts during prediction
 static arm_svm_polynomial_instance_f32* svm_ctx_array[NB_CLASSIFIERS];
 
 /**
- * @brief Inicia cada clasificador indicando sus vectores de soporte y variables duales precomputadas.
+ * @brief Initializes each classifier indicating its precomputed support vectors and dual variables.
  */
 void clasificador_svm_init(void)
 {
@@ -59,22 +59,22 @@ void clasificador_svm_init(void)
 }
 
 /**
- * @brief  Somete al vector característico a cada clasificador configurado. Al encontrar coincidencia positiva, escapa y retorna la etiqueta.
- * @param  feature_vector      Información preparada por el extractor de parámetros.
- * @param  feature_vector_size Dimensión del vector.
- * @param  label               Puntero donde se inyecta la clase ganadora si se detecta, o por consiguiente, un -1.
+ * @brief  Submits the feature vector to each configured classifier. Upon finding a positive match, exits and returns the label.
+ * @param  feature_vector      Information prepared by the parameter extractor.
+ * @param  feature_vector_size Dimension of the vector.
+ * @param  label               Pointer where the winning class is injected if detected, or otherwise, -1.
  */
 void clasificador_svm_predict(float32_t *feature_vector, uint32_t feature_vector_size, int32_t *label)
 {
-    (void)feature_vector_size; // Indicador no utilizado si se utiliza el predefinido VECTOR_DIMENSION.
+    (void)feature_vector_size; // Unused indicator if predefined VECTOR_DIMENSION is used.
     
     *label = -1;
     for(int i = 0; i < NB_CLASSIFIERS; i++)
     {
         arm_svm_polynomial_predict_f32(svm_ctx_array[i], feature_vector, label);
-        if (*label == svm_ctx_array[i]->classes[1]) // Si la inferencia indica clase reconocida
+        if (*label == svm_ctx_array[i]->classes[1]) // If inference indicates recognized class
         {
-            break; // Salir de la iteración prematuramente
+            break; // Exit the iteration early
         }
     }
 }
