@@ -22,7 +22,7 @@ python train_svm_mfcc.py
 ```
 
 ### How does `train_svm_mfcc.py` work internally?
-1. **Automatic Loading**: It searches for any file named `mfcc_*.npy` within this directory. It concatenates them vertically and assigns each its own text label by dynamically reading the file name.
+1. **Automatic Loading**: It searches for any file named `mfcc_<label>.npy` within this directory. It concatenates them vertically and assigns each its own text label by dynamically reading the file name.
 2. **Linear SVM under OVR rule**: Since the CMSIS-DSP library is efficient at evaluating binary linear models, Python splits the multiclass problem using `OneVsRestClassifier` instantiating `LinearSVC` from _Scikit-Learn_. It will internally generate $N$ independent classifiers.
 3. **Model Metrics**: It evaluates and splits the dataset (80% training, 20% testing), and prints a detailed accuracy and recall report to the console.
 4. **C Header Rendering**: It mathematically extracts the geometric configuration of the trained models (.coef_ and .intercept_) and builds/formats constant arrays in C language. Finally, it saves and prints the **`svm_params.h`** file, which is exactly the same one imported by `clasificador_svm.c` in the firmware.
