@@ -2,6 +2,18 @@
 
 This directory contains the collected datasets and the Python scripts needed to analyze, train, and format the Support Vector Machines (SVM) used by the firmware on the STM32 board.
 
+## Feature Vector Structure
+
+The feature vector computed by the STM32 board represents a frame of 16 audio hops. For each hop (32 ms), the firmware calculates the standard MFCC coefficients and their first temporal derivatives (Delta-MFCCs).
+
+Both sets of coefficients are interleaved hop by hop into a final, flat 1-dimensional array. The resulting structure consists of `2 * MFCC_COEFFS_NUM * HOPS_PER_FRAME` elements mathematically arranged as follows:
+
+```text
+[ MFCCs Hop 1 ] [ Delta-MFCCs Hop 1 ] [ MFCCs Hop 2 ] [ Delta-MFCCs Hop 2 ] ... [ MFCCs Hop 16 ] [ Delta-MFCCs Hop 16 ]
+```
+
+Each block in the sequence contains `MFCC_COEFFS_NUM` elements. This combined feature vector acts as the input for the Support Vector Machine (SVM) classifier. Before prediction or UART transmission, the `q15_t` values (specifically `q8.7` used by CMSIS-DSP) are converted to `float32_t` decimal format.
+
 ## Collecting Samples (Dataset)
 To collect your own samples, clone [this](https://github.com/rescurib/mfcc_mic_recorder) repository. That firmware will send a feature vector of a sequence of 16 hops every time you speak into the microphone.
 
