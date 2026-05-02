@@ -285,6 +285,27 @@ static void MX_GPIO_Init(void)
 
   /* USER CODE BEGIN MX_GPIO_Init_2 */
 
+  /*Configure GPIO pins : LD_RED_Pin */
+  GPIO_InitStruct.Pin   = LD_RED_PIN;
+  GPIO_InitStruct.Mode  = GPIO_MODE_OUTPUT_PP;
+  GPIO_InitStruct.Pull  = GPIO_NOPULL;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+  HAL_GPIO_Init(LD_RED_GPIO_PORT, &GPIO_InitStruct);
+
+  /*Configure GPIO pins : LD_GREEN_Pin */
+  GPIO_InitStruct.Pin   = LD_GREEN_PIN;
+  GPIO_InitStruct.Mode  = GPIO_MODE_OUTPUT_PP;
+  GPIO_InitStruct.Pull  = GPIO_NOPULL;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+  HAL_GPIO_Init(LD_GREEN_GPIO_PORT, &GPIO_InitStruct);
+
+   /*Configure GPIO pins : LD_BLUE_Pin */
+  GPIO_InitStruct.Pin   = LD_BLUE_PIN;
+  GPIO_InitStruct.Mode  = GPIO_MODE_OUTPUT_PP;
+  GPIO_InitStruct.Pull  = GPIO_NOPULL;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+  HAL_GPIO_Init(LD_BLUE_GPIO_PORT, &GPIO_InitStruct);
+
   /* USER CODE END MX_GPIO_Init_2 */
 }
 

@@ -58,35 +58,30 @@ typedef union {
 // Indicates if the microphone is currently recording
 static volatile bool is_recording = false;
 
-
 // Buffers for I2S stereo samples (2 words for left and right channels)
 static uint8_t i2s_stereo_samples[SAMPLES_PER_HOP * 2 * 4]; /**< @brief Two channels, 4 bytes per sample. */
 static uint8_t sample_buff[SAMPLES_PER_HOP * 2 * 4];        /**< @brief Buffer for one hop of mono samples (32 ms). */
 static float32_t full_buff[FULL_BUFFER_SIZE];               /**< @brief 256 ms of mono samples at 8 kHz. */
 static q15_t hop[SAMPLES_PER_HOP];                          /**< @brief Buffer for the current hop. */
 
-
 // MFCC and Delta-MFCC matrices for the frame
 q15_t mfcc_matrix[HOPS_PER_FRAME][MFCC_COEFFS_NUM]; 
 q15_t delta_mfcc_matrix[HOPS_PER_FRAME][MFCC_COEFFS_NUM];
-
 
 // Final feature vector with interleaved MFCCs and Delta-MFCCs
 #define FEATURE_VECTOR_SIZE (2 * MFCC_COEFFS_NUM * HOPS_PER_FRAME) /**< @brief Final feature vector with interleaved MFCCs and Delta-MFCCs. */
 static q15_t feature_vector_q15[FEATURE_VECTOR_SIZE]; 
 static float32_t feature_vector_f32[FEATURE_VECTOR_SIZE];
 
-
 // Global variables
 q15_t g_noise_floor = (q15_t)(0.01f * 32768); // Initial background noise floor value (RMS)
 volatile bool g_signal_detected  = false;  /**< @brief Indicates if a signal above the noise threshold has been detected */
 volatile bool g_dma_data_ready   = false;  /**< @brief Indicates if the DMA transfer has completed */
-
+static uint32_t g_last_turn_on_time = 0;
 
 // External handlers for I2S and UART (defined elsewhere)
 extern I2S_HandleTypeDef hi2s2;
 extern UART_HandleTypeDef huart2;
-
 
 // Internal function prototypes
 /**
@@ -117,6 +112,10 @@ static inline q15_t i2s_sample_to_q15(uint8_t *sample);
  */
 static inline void q8_7_to_float32(float32_t *dst, const q15_t *src, uint32_t length);
 
+static bool rgb_timeout_expired(void);
+
+// Function implementations
+
 /**
  * @brief  Update the status LED to indicate the recording state.
  * @param  recording True if recording, false otherwise.
@@ -141,6 +140,7 @@ static inline void update_status_led(bool recording)
  */
 void app_run(void)
 {
+
     // State initialization
     is_recording = false;
     update_status_led(is_recording);
@@ -179,9 +179,34 @@ void app_run(void)
                 // Classify the sample with the SVM model
                 int32_t svm_result = -1;
                 clasificador_svm_predict(feature_vector_f32, FEATURE_VECTOR_SIZE, &svm_result);
-
                 hop_index = 0;
                 g_signal_detected = false;
+
+                // RGB control based on detected word
+                switch(svm_result)
+                {
+                    case 'R': // Detected "RED"
+                        HAL_GPIO_WritePin(LD_RED_GPIO_PORT,   LD_RED_PIN, GPIO_PIN_SET);
+                        HAL_GPIO_WritePin(LD_GREEN_GPIO_PORT, LD_GREEN_PIN, GPIO_PIN_RESET);
+                        HAL_GPIO_WritePin(LD_BLUE_GPIO_PORT,  LD_BLUE_PIN, GPIO_PIN_RESET);
+                        g_last_turn_on_time = HAL_GetTick();
+                        break;
+                    case 'G': // Detected "GREEN"
+                        HAL_GPIO_WritePin(LD_RED_GPIO_PORT,   LD_RED_PIN, GPIO_PIN_RESET);
+                        HAL_GPIO_WritePin(LD_GREEN_GPIO_PORT, LD_GREEN_PIN, GPIO_PIN_SET);
+                        HAL_GPIO_WritePin(LD_BLUE_GPIO_PORT,  LD_BLUE_PIN, GPIO_PIN_RESET);
+                        g_last_turn_on_time = HAL_GetTick();
+                        break;
+                    case 'B': // Detected "BLUE"
+                        HAL_GPIO_WritePin(LD_RED_GPIO_PORT,   LD_RED_PIN, GPIO_PIN_RESET);
+                        HAL_GPIO_WritePin(LD_GREEN_GPIO_PORT, LD_GREEN_PIN, GPIO_PIN_RESET);
+                        HAL_GPIO_WritePin(LD_BLUE_GPIO_PORT,  LD_BLUE_PIN, GPIO_PIN_SET);
+                        g_last_turn_on_time = HAL_GetTick();
+                        break;
+                    default: // No word detected
+                        // Do nothing
+                        break;
+                }
 
                 // Send result via UART
                 const char* msg = "Detected word (initial): ";
@@ -192,6 +217,14 @@ void app_run(void)
                     HAL_UART_Transmit(&huart2, (uint8_t*)"\r\n", 2, 100U);
                 }
             }
+        }
+
+       // Turn off RGB after a non-blocking time-out
+       if(rgb_timeout_expired())
+        {
+            HAL_GPIO_WritePin(LD_RED_GPIO_PORT,   LD_RED_PIN, GPIO_PIN_RESET);
+            HAL_GPIO_WritePin(LD_GREEN_GPIO_PORT, LD_GREEN_PIN, GPIO_PIN_RESET);
+            HAL_GPIO_WritePin(LD_BLUE_GPIO_PORT,  LD_BLUE_PIN, GPIO_PIN_RESET);
         }
     }
 }
@@ -355,4 +388,18 @@ static inline void q8_7_to_float32(float32_t *dst, const q15_t *src, uint32_t le
     {
         dst[i] = (float32_t)(q31_t)src[i] / 128.0f; // Convert from Q8.7 to float
     }
+}
+
+static bool rgb_timeout_expired(void)
+{
+    // Implement a non-blocking timeout mechanism (e.g., using HAL_GetTick())
+    const uint32_t timeout_duration = 4000; // 4 seconds
+
+    uint32_t current_time = HAL_GetTick();
+    if ((current_time - g_last_turn_on_time) >= timeout_duration)
+    {
+    	g_last_turn_on_time = current_time; // Reset the timer
+        return true; // Timeout expired
+    }
+    return false; // Timeout not yet expired
 }
