@@ -42,7 +42,7 @@ clasificador_vocales_svm/
 - User button (B1)
 
 <p align="center">
-<img src="https://drive.google.com/uc?export=view&id=1k-mYVQVk2T5NjttuTqAW95a4pcD9Cpar" width="500">
+<img src="https://drive.google.com/uc?export=view&id=1k-1eBj3Qc20LbEmQ5CiQ1Q0t7w0_jWsDsxC" width="500">
 <p>
 
 ## Configuration
