@@ -1,6 +1,6 @@
 # Words Classifier with SVMs
 
-This project implements an SVM classifier for the detection of three wake up words: *red*, *green*, and *blue*, using an STM32F3 microcontroller. The system acquires audio through an INMP441 MEMS microphone, extracts MFCC features, and classifies the vowel using Support Vector Machines (SVM).
+This project implements an SVM classifier for the detection of three wake up words: *red*, *green*, and *blue*, using an STM32F3 microcontroller. The system acquires audio through an INMP441 MEMS microphone, extracts MFCC features, and classifies each word using Support Vector Machines (SVM).
 
 ## Main Features
 
@@ -18,7 +18,7 @@ This project implements an SVM classifier for the detection of three wake up wor
 ## Project Structure
 
 ```
-clasificador_vocales_svm/
+rgb_wake_up_words_svm/
 ├── Inc/                      # Application headers
 │   ├── app.h                 # Main application header
 │   ├── clasificador_svm.h    # SVM classifier definitions
