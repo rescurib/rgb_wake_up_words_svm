@@ -329,7 +329,7 @@ void HAL_I2S_RxCpltCallback(I2S_HandleTypeDef *hi2s)
 
     arm_rms_q15(hop, SAMPLES_PER_HOP, &result);
 
-    if(result > 7.5 * g_noise_floor)
+    if(result > 5.5 * g_noise_floor)
     {
         g_signal_detected = true;
     } else

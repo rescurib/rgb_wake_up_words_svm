@@ -27,9 +27,9 @@ void clasificador_svm_init(void)
                                 dualCoefficients_blue_vs_rest,
                                 supportVectors_blue_vs_rest,
                                 classes_blue_vs_rest,
-                                1, /* degree */
-                                0.0f, /* coef0 */
-                                1.0f /* gamma */);
+                                DEGREE_BLUE_VS_REST,
+                                COEF0_BLUE_VS_REST,
+                                GAMMA_BLUE_VS_REST);
     // green vs rest
     arm_svm_polynomial_init_f32(&svm_green_ctx,
                                 NB_SV_GREEN_VS_REST,
@@ -38,9 +38,9 @@ void clasificador_svm_init(void)
                                 dualCoefficients_green_vs_rest,
                                 supportVectors_green_vs_rest,
                                 classes_green_vs_rest,
-                                1, /* degree */
-                                0.0f, /* coef0 */
-                                1.0f /* gamma */);    
+                                DEGREE_GREEN_VS_REST,
+                                COEF0_GREEN_VS_REST,
+                                GAMMA_GREEN_VS_REST);    
     // red vs rest
     arm_svm_polynomial_init_f32(&svm_red_ctx,
                                 NB_SV_RED_VS_REST,
@@ -49,9 +49,9 @@ void clasificador_svm_init(void)
                                 dualCoefficients_red_vs_rest,
                                 supportVectors_red_vs_rest,
                                 classes_red_vs_rest,
-                                1, /* degree */
-                                0.0f, /* coef0 */
-                                1.0f /* gamma */);
+                                DEGREE_RED_VS_REST,
+                                COEF0_RED_VS_REST,
+                                GAMMA_RED_VS_REST);
                         
     svm_ctx_array[0] = &svm_blue_ctx;
     svm_ctx_array[1] = &svm_green_ctx;
