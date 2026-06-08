@@ -171,7 +171,7 @@ def main():
 
     print("Training OvR polynomial SVM classifiers...")
     ovr_clf = OneVsRestClassifier(SVC(kernel='poly',
-                                      degree=2,
+                                      degree=3,
                                       gamma='scale',
                                       coef0=0.0,
                                       random_state=42,
